@@ -9,6 +9,15 @@ describe('test ListLexer', () => {
 		expect(() => {
 			parser.list()
 		}).toNotThrow()
+	})
+
+	it('should not throw error too', () => {
+		let lexer = new ListLexer('[a, b = c, [d, e]]')
+		let parser = new ListParser(lexer, 2)
+
+		expect(() => {
+			parser.list()
+		}).toNotThrow()
 		
 	})
 
