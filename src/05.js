@@ -19,37 +19,77 @@ const createMatch = (char, length) => {
 	return { start, end }
 }
 
-const createTokenizer = match => (input, start) => {
-	let offset = 0
-	let item = input[start + offset]
-	let value = ''
+const defaultGetValue = (item, value) => value + item
 
-	if (!match.start(item, value)) {
-		return
-	}
+const createTokenizer = match => {
+	let tokenizer = (input, start) => {
+		let item = input[start]
+		// if (match.test) {
+		// 	console.log(item, start)
+		// }
+		if (!match.start(item)) {
+			return
+		}
 
-	do {
-		value += item.value || item
+		let value = ''
+
+		if (match.getInitialValue) {
+			value = match.getInitialValue(item)
+		}
+
+		let getValue = match.getValue || defaultGetValue
+		let offset = 0
+
+		if (match.first !== false) {
+			value = getValue(item, value, offset)
+		}
+
+		if (match.check && match.check(value, offset, start) === false) {
+			return
+		}
+
 		offset += 1
 		item = input[start + offset]
-		if (item === undefined) {
-			break
-		}
-	} while (!match.end(item, value))
 
-	return {
-		value: value,
-		start: start,
-		end: start + offset + 1
+		while (item !== undefined && !match.end(item, value)) {
+			value = getValue(item, value, offset)
+			offset += 1
+			item = input[start + offset]
+			if (match.check && match.check(value, offset, start) === false) {
+				return
+			}
+		}
+
+		if (item && match.last === true) {
+			value = getValue(item, value, offset)
+			offset += 1
+			if (match.check && match.check(value, offset, start) === false) {
+				return
+			}
+		}
+
+		if (match.getFinalValue) {
+			value = match.getFinalValue(value, offset, start)
+		}
+
+		return {
+			value: value,
+			start: start,
+			end: start + offset
+		}
 	}
+
+	return tokenizer
 }
 
 const patterns = {
 	'DOUBLE_QUOTES_STRING': createTokenizer({
+		last: true,
 		start: char => char === '"',
 		end: char => char === '"',
 	}),
 	'SINGLE_QUOTES_STRING': createTokenizer({
+		last: true,
 		start: char => char === '\'',
 		end: char => char === '\'',
 	}),
@@ -89,7 +129,10 @@ const patterns = {
 	'ASTERISK': createTokenizer(createMatch('*', 1)),
 	'LEFT_ANGLE_BRACKET': createTokenizer(createMatch('<', 1)),
 	'RIGHT_ANGLE_BRACKET': createTokenizer(createMatch('>', 1)),
-	'UNKNOW': createTokenizer(() => true)
+	'UNKNOW': createTokenizer({
+		start: () => true,
+		end: () => true,
+	})
 }
 
 function getToken(input, start) {
@@ -107,14 +150,83 @@ function tokenizer(input) {
 	let tokens = []
 	while (index < input.length) {
 		let token = getToken(input, index)
-		if (!token) {
-			throw new Error(`Unknow char: ${input[index]}`)
+		if (token) {
+			tokens[tokens.length] = token
+			index = token.end
 		}
-		tokens.push(token)
-		index = token.end
 	}
 	return tokens
 }
+
+
+const patterns1 = {
+	'RULE': createTokenizer({
+		last: true,
+		getInitialValue: () => [],
+		check: value => !!value,
+		start: token => token.type === 'NAME',
+		end: (token, value) => {
+			return token.type === 'SEMICOLON'
+		},
+		getValue: (token, value, offset) => {
+			if (value.length === 0) {
+				value.push(token)
+				return value
+			}
+
+			let last = value[value.length - 1]
+			if (value.length === 1 && last.type === 'NAME' && token.type !== 'COLON') {
+				return
+			}
+
+			value.push(token)
+			return value
+		},
+		getFinalValue: tokens => tokens.map(token => token.value).join(''),
+	}),
+	// 'RULES': createTokenizer({
+	// 	test: true,
+	// 	last: true,
+	// 	start: token => token.type === 'LEFT_BRACE',
+	// 	end: token => token.type === 'RIGHT_BRACE',
+	// 	getValue: (item, value) => value + item.value,
+	// }),
+	'SELECTOR': createTokenizer({
+		start: token => token.type !== 'LEFT_BRACE' && token.type !== 'WHITE_SPACE' && token.type !== 'SEMICOLON',
+		end: token => token.type === 'WHITE_SPACE' || token.type === 'LEFT_BRACE',
+		getValue: (item, value) => value + item.value,
+	}),
+	'UNKNOW': createTokenizer({
+		start: () => true,
+		end: () => true,
+		getValue: (item) => item,
+	}),
+}
+
+function getToken1(input, start) {
+	for (let key in patterns1) {
+		let tokenizer = patterns1[key]
+		let token = tokenizer(input, start)
+		if (token) {
+			return Object.assign({type: key}, token)
+		}
+	}
+}
+
+function tokenizer1(input) {
+	let index = 0
+	let tokens = []
+	while (index < input.length) {
+		let token = getToken1(input, index)
+		if (token) {
+			tokens[tokens.length] = token
+			index = token.end
+		}
+	}
+	return tokens
+}
+
+
 
 
 let fs = require('fs')
@@ -122,6 +234,7 @@ let path = require('path')
 let cssFilePath = path.join(__dirname, 'files/test.css')
 let content = fs.readFileSync(cssFilePath).toString()
 let tokens = tokenizer(content)
+let tokens1 = tokenizer1(tokens)
 
-let destPath = path.join(__dirname, 'dest/05.txt')
-fs.writeFileSync(destPath, JSON.stringify(tokens, null, 2))
+let destPath = path.join(__dirname, 'dest/05.json')
+fs.writeFileSync(destPath, JSON.stringify(tokens1, null, 2))
