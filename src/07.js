@@ -15,27 +15,7 @@ const NUMBER = 0
 const OPERAND = 1
 const UNKNOW = 2
 const PARENTHESE = 3
-
 const GROUPING = 4
-
-const OPERAND_ARGUMENT_MAP = {
-  [PLUS_SIGN]: {
-    type: NUMBER,
-    count: 2
-  },
-  [MINUS_SIGN]: {
-    type: NUMBER,
-    count: 2
-  },
-  [MULTIPLICATION_SIGN]: {
-    type: NUMBER,
-    count: 2
-  },
-  [DEVISION_SIGN]: {
-    type: NUMBER,
-    count: 2
-  }
-}
 
 class Character {
   constructor(value) {
@@ -232,6 +212,7 @@ class Parser {
     this.tokenList = new Tokenizer(this.input).execute()
     this.index = 0
     this.token = null
+    this.cache = []
   }
   isNotEnd() {
     return this.index < this.input.length
@@ -243,12 +224,15 @@ class Parser {
       null
     }
   }
-  lookahead(number = 1) {
+  peek(number = 1) {
     if (this.index + number < this.tokenList.length) {
       return this.tokenList[this.index + number]
     } else {
       return null
     }
+  }
+  match(...args) {
+    return args.every((type, index) => this.peek(index) ? this.peek(index).is(type) : false)
   }
   consume() {
     this.token = this.next()
@@ -318,43 +302,82 @@ class Parser {
     return expression
   }
   handleExpresssion() {
-    if (!this.token.is(NUMBER)) {
-      this.handleUnexpectedToken()
-    }
     let expression = new ExpressionStatement()
 
-    expression.addArgument(this.handleNumber())
-    this.consumeAndShouldNotEnding()
+    
 
-    if (!this.token.is(OPERAND)) {
-      this.handleUnexpectedToken()
-    }
-
-    expression.addOperand(this.handleOperand())
-
-    if (!this.token.is(NUMBER)) {
-      this.handleUnexpectedToken()
-    }
-    expression.addArgument(this.handleNumber())
-    this.consume()
-    return expression
+    let 
   }
-  handle() {
-    if (this.token.is(PARENTHESE)) {
-      return this.handleGrouping()
+  // 1 * 2 + 2 + (3 + 4) * 2 * 3 / 2
+  handle(tokenList) {
+    let token = tokenList.pop()
+
+    if (token.is(NUMBER)) {
+      let prevToken = tokenList.pop()
+
+      if (!prevToken.is(OPERAND)) {
+        throw new Error('expect operand')
+      }
+
+      if (prevToken.value === MINUS_SIGN || prevToken.value === MINUS_SIGN) {
+        let expression = new ExpressionStatement()
+        expression.addOperand(new OperandLiteral(prevToken.value))
+        expression.addArgument(this.handle(tokenList))
+        expression.addArgument(new NumberLiteral(token.value))
+        return expression
+      }
+
+      if (prevToken.value === MULTIPLICATION_SIGN || prevToken.value === DEVISION_SIGN) {
+        let subTokenList = []
+        let item
+
+        
+
+      }
+      
     }
 
-    if (this.token.is(NUMBER)) {
-      return this.handleExpresssion()
+    while (token = tokenList.pop()) {
+      
     }
 
-    if (this.token.is(OPERAND)) {
-      return this.handleOperand()
+    token = token || this.next()
+    if (token.is(NUMBER) && this.peek(1).is(OPERAND)) {
+      let expression = new ExpressionStatement()
+      expression.addArgument(new NumberLiteral(token.value))
+      expression.addOperand(new OperandLiteral(this.next().value))
+
+      let node = this.handle()
+
+      while (node)
+
+      if (node instanceof NumberLiteral) {
+        expression.addArgument(node.value)
+        return expression
+      }
+
+      if (node instanceof ExpressionStatement) {
+
+      }
+
+      expression.addArgument(this.handle())
+      return expression
     }
+
+    if (token.is(PARENTHESE) && token.value === LEFT_PARENTHESE) {
+      let grouping = new GroupingStatement()
+      let nextToken = this.next()
+      while (!(nextToken.is(PARENTHESE) && nextToken.value === RIGHT_PARENTHESE)) {
+        grouping.addNode(this.handle(nextToken))
+      }
+      return grouping
+    }
+
   }
   execute() {
+    this.ast = new Ast()
     while (this.isNotEnd()) {
-      this.ast.addNode(this.handle())
+      this.ast.addNode(this.handle(this.next()))
     }
     return this.ast
   }
